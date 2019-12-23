@@ -13,26 +13,39 @@ import java.util.List;
 
 public class AnalyzeByXPath {
     private JXDocument jxDocument;
+    private JXNode jxNode;
 
     public AnalyzeByXPath parse(Object doc) {
-        if (doc instanceof Document) {
+        if (doc instanceof JXNode) {
+            jxNode = (JXNode) doc;
+            if (!jxNode.isElement()) {
+                jxDocument = strToJXDocument(doc.toString());
+                jxNode = null;
+            }
+        } else if (doc instanceof Document) {
             jxDocument = JXDocument.create((Document) doc);
+            jxNode = null;
         } else if (doc instanceof Element) {
             jxDocument = JXDocument.create(new Elements((Element) doc));
+            jxNode = null;
         } else if (doc instanceof Elements) {
             jxDocument = JXDocument.create((Elements) doc);
+            jxNode = null;
         } else {
-            String html = doc.toString();
-            // 给表格标签添加完整的框架结构,否则会丢失表格标签;html标准不允许表格标签独立在table之外
-            if (html.endsWith("</td>")) {
-                html = String.format("<tr>%s</tr>", html);
-            }
-            if (html.endsWith("</tr>") || html.endsWith("</tbody>")) {
-                html = String.format("<table>%s</table>", html);
-            }
-            jxDocument = JXDocument.create(html);
+            jxDocument = strToJXDocument(doc.toString());
+            jxNode = null;
         }
         return this;
+    }
+
+    private JXDocument strToJXDocument(String html) {
+        if (html.endsWith("</td>")) {
+            html = String.format("<tr>%s</tr>", html);
+        }
+        if (html.endsWith("</tr>") || html.endsWith("</tbody>")) {
+            html = String.format("<table>%s</table>", html);
+        }
+        return JXDocument.create(html);
     }
 
     List<JXNode> getElements(String xPath) {
@@ -53,6 +66,9 @@ public class AnalyzeByXPath {
             elementsType = "|";
         }
         if (rules.length == 1) {
+            if (jxNode != null) {
+                return jxNode.sel(rules[0]);
+            }
             return jxDocument.selN(rules[0]);
         } else {
             List<List<JXNode>> results = new ArrayList<>();
@@ -99,7 +115,12 @@ public class AnalyzeByXPath {
             elementsType = "|";
         }
         if (rules.length == 1) {
-            List<JXNode> jxNodes = jxDocument.selN(xPath);
+            List<JXNode> jxNodes;
+            if (jxNode != null) {
+                jxNodes = jxNode.sel(xPath);
+            } else {
+                jxNodes = jxDocument.selN(xPath);
+            }
             for (JXNode jxNode : jxNodes) {
                 /*if(jxNode.isString()){
                     result.add(String.valueOf(jxNode));
@@ -148,23 +169,26 @@ public class AnalyzeByXPath {
             elementsType = "|";
         }
         if (rules.length == 1) {
-            /*Object object = jxDocument.selOne(rule);
-            result = object instanceof Element ? ((Element) object).html() : (String) object;*/
-            List<JXNode> jxNodes = jxDocument.selN(rule);
+            List<JXNode> jxNodes;
+            if (jxNode != null) {
+                jxNodes = jxNode.sel(rule);
+            } else {
+                jxNodes = jxDocument.selN(rule);
+            }
             if (jxNodes == null) return null;
             return TextUtils.join(",", jxNodes);
         } else {
-            StringBuilder sb = new StringBuilder();
+            List<String> textS = new ArrayList<>();
             for (String rl : rules) {
                 String temp = getString(rl);
                 if (!TextUtils.isEmpty(temp)) {
-                    sb.append(temp);
+                    textS.add(temp);
                     if (elementsType.equals("|")) {
                         break;
                     }
                 }
             }
-            return sb.toString();
+            return TextUtils.join(",", textS).trim();
         }
     }
 }
